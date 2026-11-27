@@ -12,6 +12,8 @@ import win32com.client
 
 from solidedge_mcp.backends.errors import error_result, is_disconnected_error
 
+from . import app_settings
+from .app_settings import SettingError
 from .comutil import com_get
 from .logging import get_logger
 
@@ -511,11 +513,11 @@ class SolidEdgeConnection:
         """
         Get an application-level global parameter.
 
-        Uses Application.GetGlobalParameter(param). Parameter IDs come from
-        the AssemblyGlobalConstants enum (1-21).
+        Uses Application.GetGlobalParameter(param). Parameter IDs are members
+        of ApplicationGlobalConstants; get_setting takes them by name.
 
         Args:
-            parameter: Global parameter ID (from AssemblyGlobalConstants)
+            parameter: Global parameter ID (ApplicationGlobalConstants)
 
         Returns:
             Dict with parameter value
@@ -531,11 +533,11 @@ class SolidEdgeConnection:
         """
         Set an application-level global parameter.
 
-        Uses Application.SetGlobalParameter(param, value). Parameter IDs come
-        from the AssemblyGlobalConstants enum (1-21).
+        Uses Application.SetGlobalParameter(param, value). Parameter IDs are
+        members of ApplicationGlobalConstants; set_setting takes them by name.
 
         Args:
-            parameter: Global parameter ID (from AssemblyGlobalConstants)
+            parameter: Global parameter ID (ApplicationGlobalConstants)
             value: New value for the parameter
 
         Returns:
@@ -545,6 +547,35 @@ class SolidEdgeConnection:
             app = self._get_app()
             app.SetGlobalParameter(parameter, value)
             return {"status": "set", "parameter": parameter, "value": value}
+        except Exception as e:
+            return error_result(e)
+
+    def list_settings(
+        self, contains: str = "", with_values: bool = True, limit: int = 100
+    ) -> dict[str, Any]:
+        """Application settings whose name contains ``contains``; see app_settings.py."""
+        try:
+            return app_settings.list_settings(self._get_app(), contains, with_values, limit)
+        except SettingError as e:
+            return {"error": str(e)}
+        except Exception as e:
+            return error_result(e)
+
+    def get_setting(self, name: str) -> dict[str, Any]:
+        """Read an application setting by name."""
+        try:
+            return app_settings.get_setting(self._get_app(), name)
+        except SettingError as e:
+            return {"error": str(e)}
+        except Exception as e:
+            return error_result(e)
+
+    def set_setting(self, name: str, value: Any) -> dict[str, Any]:
+        """Write an application setting by name; reports the old value."""
+        try:
+            return app_settings.set_setting(self._get_app(), name, value)
+        except SettingError as e:
+            return {"error": str(e)}
         except Exception as e:
             return error_result(e)
 

@@ -52,6 +52,17 @@ UNVERIFIED: frozenset[str] = frozenset(
         "IsWindowVisible",
         "SendMessageW",
         "WINFUNCTYPE",
+        # pythoncom ITypeInfo / ITypeLib, reading constant.tlb (app_settings.py)
+        "GetContainingTypeLib",
+        "GetDocumentation",
+        "GetLibAttr",
+        "GetNames",
+        "GetTypeAttr",
+        "GetTypeInfo",
+        "GetTypeInfoCount",
+        "GetVarDesc",
+        "LoadTypeLib",
+        "QueryPathOfRegTypeLib",
         "GetIDsOfNames",  # IDispatch itself, via doc._oleobj_ (export/_draft.py)
         "InvokeTypes",  # same: declared-type invoke for [in, out] parameters
         "Formatter",

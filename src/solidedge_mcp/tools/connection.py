@@ -72,6 +72,9 @@ def app_config(
         "set_global",
         "get_template",
         "set_template",
+        "list_settings",
+        "get_setting",
+        "set_setting",
     ],
     delay_compute: bool | None = None,
     screen_updating: bool | None = None,
@@ -83,8 +86,18 @@ def app_config(
     value: float = 0.0,
     doc_type: int = 1,
     template_path: str = "",
+    name: str = "",
+    setting_value: str | float | bool | None = None,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Get or set application-level settings.
+
+    list_settings / get_setting / set_setting: Tools > Options settings by
+    name (e.g. "AutoSaveMinutes"; numbers are looked up in the running Solid
+    Edge's type library, so they follow version changes). list_settings: name
+    = substring filter, limit, returns current values. set_setting: name +
+    setting_value, coerced to the setting's type; returns old_value. Settings
+    persist across sessions: change them only when asked, and say how to undo.
 
     set_performance: delay_compute/screen_updating/interactive/display_alerts
     (None leaves a flag unchanged). set_status_bar: text. set_visible: visible.
@@ -114,6 +127,14 @@ def app_config(
             return connection.get_global_parameter(parameter=parameter)
         case "set_global":
             return connection.set_global_parameter(parameter=parameter, value=value)
+        case "list_settings":
+            return connection.list_settings(contains=name, limit=limit)
+        case "get_setting":
+            return connection.get_setting(name=name)
+        case "set_setting":
+            if setting_value is None:
+                return {"error": "set_setting needs setting_value"}
+            return connection.set_setting(name=name, value=setting_value)
         case "get_template":
             return connection.get_default_template_path(doc_type=doc_type)
         case "set_template":

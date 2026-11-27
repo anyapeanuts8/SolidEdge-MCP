@@ -98,6 +98,8 @@ class TestAppConfig:
             ("set_global", "set_global_parameter"),
             ("get_template", "get_default_template_path"),
             ("set_template", "set_default_template_path"),
+            ("list_settings", "list_settings"),
+            ("get_setting", "get_setting"),
         ],
     )
     def test_dispatch(self, mock_mgr, disc, method):
@@ -125,6 +127,17 @@ class TestAppConfig:
         mock_mgr.set_default_template_path.assert_called_once_with(
             doc_type=3, template_path="/t.asm"
         )
+
+    def test_settings_by_name(self, mock_mgr):
+        mock_mgr.set_setting.return_value = {"status": "set"}
+        app_config(property="set_setting", name="AutoSaveMinutes", setting_value=30)
+        mock_mgr.set_setting.assert_called_once_with(name="AutoSaveMinutes", value=30)
+        app_config(property="list_settings", name="grid", limit=5)
+        mock_mgr.list_settings.assert_called_once_with(contains="grid", limit=5)
+
+    def test_set_setting_needs_a_value(self, mock_mgr):
+        assert "setting_value" in app_config(property="set_setting", name="X")["error"]
+        mock_mgr.set_setting.assert_not_called()
 
     def test_unknown(self, mock_mgr):
         result = app_config(property="bogus")
