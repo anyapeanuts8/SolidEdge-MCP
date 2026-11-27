@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from solidedge_mcp.backends.constants import DocumentTypeConstants
+from solidedge_mcp.backends.dialogs import SEGMENTS_DIALOG_PREFIXES
 
 IG_ASSEMBLY_DOCUMENT = DocumentTypeConstants.igAssemblyDocument
 IG_DRAFT_DOCUMENT = DocumentTypeConstants.igDraftDocument
@@ -325,7 +326,7 @@ class TestStructuralFrames:
         args = doc.StructuralFrames.Add.call_args.args
         assert args[:3] == (str(part), 2, lines)
         assert all(a.varianttype == pythoncom.VT_EMPTY for a in args[3:])
-        assert seen["prefix"] == "The Segments group of commands"
+        assert seen["prefix"] == SEGMENTS_DIALOG_PREFIXES
 
     def test_a_bad_index_or_no_lines_is_refused(self, asm_mgr, tmp_path, monkeypatch):
         am, doc = asm_mgr
@@ -344,7 +345,7 @@ class TestStructuralFrames:
         args = doc.StructuralFrames.AddByOrientation.call_args.args
         assert args[:4] == (str(part), "Base", 1, lines)
         assert len(args) == 8
-        assert seen["prefix"] == "The Segments group of commands"
+        assert seen["prefix"] == SEGMENTS_DIALOG_PREFIXES
 
 
 class TestAddSplice:

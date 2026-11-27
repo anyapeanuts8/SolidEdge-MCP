@@ -36,3 +36,20 @@ def test_without_user32_it_is_inert(monkeypatch):
     with dialogs.dismiss_informational_dialog("x") as d:
         pass
     assert d.dismissed == 0
+
+
+def test_the_japanese_segments_dialog_is_clicked(monkeypatch):
+    # Text as Solid Edge 2026 Community Edition shows it with a Japanese UI.
+    windows = [
+        (9, "Solid Edge", ["OK", "今後セグメントコマンドは機能強化されないので、コマンドの..."])
+    ]
+    clicked, d = _run(monkeypatch, windows, dialogs.SEGMENTS_DIALOG_PREFIXES)
+    assert 9 in clicked
+    assert d.dismissed >= 1
+
+
+def test_the_segments_prefixes_still_leave_other_dialogs_alone(monkeypatch):
+    windows = [(10, "Solid Edge", ["OK", "このファイルは既に存在します。上書きしますか?"])]
+    clicked, d = _run(monkeypatch, windows, dialogs.SEGMENTS_DIALOG_PREFIXES)
+    assert clicked == []
+    assert d.dismissed == 0

@@ -10,7 +10,7 @@ from win32com.client import VARIANT
 from solidedge_mcp.backends.errors import error_result
 
 from ..comutil import com_get
-from ..dialogs import dismiss_informational_dialog
+from ..dialogs import SEGMENTS_DIALOG_PREFIXES, dismiss_informational_dialog
 from ..features._base import verifies_collection_growth
 from ..logging import get_logger
 
@@ -369,7 +369,7 @@ class SpecializedMixin:
                 }
             path = [lines[i] for i in path_indices]
             empty = VARIANT(pythoncom.VT_EMPTY, None)
-            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+            with dismiss_informational_dialog(SEGMENTS_DIALOG_PREFIXES) as dialog:
                 doc.StructuralFrames.Add(part_filename, len(path), path, empty, empty, empty)
             return {
                 "status": "created",
@@ -432,7 +432,7 @@ class SpecializedMixin:
             # with an empty coordinate-system name; the same informational dialog
             # as Add is dismissed while it runs.
             empty = VARIANT(pythoncom.VT_EMPTY, None)
-            with dismiss_informational_dialog("The Segments group of commands") as dialog:
+            with dismiss_informational_dialog(SEGMENTS_DIALOG_PREFIXES) as dialog:
                 doc.StructuralFrames.AddByOrientation(
                     part_filename, coord_system_name, len(path), path, empty, empty, empty, empty
                 )
