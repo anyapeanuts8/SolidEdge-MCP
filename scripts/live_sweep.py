@@ -49,14 +49,41 @@ _stop = threading.Event()
 modals: list[str] = []
 
 
+def _solid_edge_pids() -> set[int]:
+    """Process ids of Edge.exe, so the watchdog leaves every other app's dialogs alone."""
+    import subprocess
+
+    out = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq Edge.exe", "/FO", "CSV", "/NH"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    pids = set()
+    for line in out.splitlines():
+        cells = [c.strip('"') for c in line.split('","')]
+        if len(cells) > 1 and cells[1].isdigit():
+            pids.add(int(cells[1]))
+    return pids
+
+
+def _window_pid(hwnd: Any) -> int:
+    pid = ctypes.c_ulong()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value
+
+
 def _watchdog() -> None:
     proto = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    pids = _solid_edge_pids()
     while not _stop.is_set():
 
         def cb(hwnd: Any, _: Any) -> bool:
             cls = ctypes.create_unicode_buffer(256)
             user32.GetClassNameW(hwnd, cls, 256)
-            if cls.value == "#32770" and user32.IsWindowVisible(hwnd):
+            # Only Solid Edge's own dialogs: a dialog in any other program
+            # (a Save prompt in an editor, say) is someone's work in progress.
+            if cls.value == "#32770" and user32.IsWindowVisible(hwnd) and _window_pid(hwnd) in pids:
                 title = ctypes.create_unicode_buffer(512)
                 user32.GetWindowTextW(hwnd, title, 512)
                 modals.append(title.value)
@@ -658,10 +685,15 @@ CASES: list[Case] = [
 def unwrap(res: Any) -> Any:
     if getattr(res, "data", None) is not None:
         return res.data
+    # capture_view answers images first and its JSON summary last, so read the
+    # last text item rather than assuming the first one is text.
+    texts = [c.text for c in (res.content or []) if getattr(c, "text", None) is not None]
+    if not texts:
+        return None
     try:
-        return json.loads(res.content[0].text)
+        return json.loads(texts[-1])
     except Exception:
-        return res.content[0].text if res.content else None
+        return texts[-1]
 
 
 def classify(payload: Any) -> tuple[str, str]:
@@ -770,12 +802,36 @@ async def main() -> int:
             return 2
         version = str(conn.get("version", "?"))
 
+        # Documents open before the run belong to whoever is at the keyboard.
+        # close_document(scope="all", discard_unsaved=True) would throw their
+        # unsaved work away, so the sweep closes only what it opened, by name,
+        # straight through COM.
+        import win32com.client
+
+        app = win32com.client.GetActiveObject("SolidEdge.Application")
+
+        def open_names() -> list[str]:
+            docs = app.Documents
+            return [str(docs.Item(i).Name) for i in range(1, docs.Count + 1)]
+
+        preexisting = set(open_names())
+        print(f"left open (not ours): {sorted(preexisting) or 'none'}", flush=True)
+
         async def close_all() -> None:
-            # discard_unsaved is required: every scratch document is dirty, and
-            # close_all_documents rightly refuses to throw away unsaved work
-            # without it. Omitting it made each close after the first dirty
-            # document a no-op, so documents piled up across the run.
-            await raw("close_document", scope="all", save=False, discard_unsaved=True)
+            for _ in range(50):
+                docs = app.Documents
+                ours = [
+                    docs.Item(i)
+                    for i in range(docs.Count, 0, -1)
+                    if str(docs.Item(i).Name) not in preexisting
+                ]
+                if not ours:
+                    return
+                try:
+                    ours[0].Close(False)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  could not close {ours[0].Name}: {exc}", flush=True)
+                    return
 
         # the saved part every assembly and draft case needs
         await close_all()
