@@ -3,6 +3,8 @@
 import math
 from typing import Any, Literal
 
+from fastmcp.utilities.types import Image
+
 from solidedge_mcp.backends.validation import validate_path
 from solidedge_mcp.managers import export_manager, view_manager
 from solidedge_mcp.tools._registry import register_tool
@@ -568,6 +570,40 @@ def set_camera(
 
 
 # ================================================================
+# Group 52c: capture_view — look at the model
+# ================================================================
+
+
+def capture_view(
+    views: list[Literal["Current", "Iso", "Top", "Front", "Right"]] | None = None,
+    width: int = 800,
+    height: int = 600,
+    fit: bool = True,
+    restore_view: bool = True,
+) -> Any:
+    """Render the active 3D window and return the images, to check the shape.
+
+    views: one image per entry, in order. Current = the camera as it is;
+    Iso/Top/Front/Right = Solid Edge's named views. Default ["Iso"].
+    width/height: pixels, 64-4096. fit: zoom to fit before each shot.
+    restore_view: put the user's camera back afterwards.
+    Returns the PNG images followed by a JSON summary.
+    """
+    result = view_manager.capture_view_images(
+        views=list(views) if views else ["Iso"],
+        width=width,
+        height=height,
+        fit=fit,
+        restore_view=restore_view,
+    )
+    if "error" in result:
+        return result
+    images = result.pop("images")
+    result["views"] = [img["view"] for img in images]
+    return [*(Image(data=img["png"], format="png") for img in images), result]
+
+
+# ================================================================
 # Group 53: display_control (4 → 1)
 # ================================================================
 
@@ -953,6 +989,7 @@ def register(mcp: Any) -> None:
     register_tool(mcp, add_2d_dimension, tags=draft_tags)
     register_tool(mcp, camera_control, tags=export_tags)
     register_tool(mcp, set_camera, tags=export_tags, idempotent=True)
+    register_tool(mcp, capture_view, tags=export_tags, read_only=True, idempotent=True)
     register_tool(mcp, display_control, tags=export_tags, idempotent=True)
     register_tool(mcp, manage_sheet, tags=draft_tags, destructive=True)
     register_tool(mcp, print_control, tags=draft_tags)

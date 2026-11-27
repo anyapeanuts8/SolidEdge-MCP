@@ -1,6 +1,8 @@
 """ViewModel class for view manipulation (orientation, zoom, display, camera)."""
 
 import math
+import os
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from solidedge_mcp.backends.errors import error_result
@@ -13,6 +15,12 @@ from ..logging import get_logger
 from ._base import com_get, resolve_view
 
 _logger = get_logger(__name__)
+
+# What capture_view_images accepts: the camera as it stands, or one of the four
+# names View.ApplyNamedView accepts on Solid Edge 2026 (see set_view).
+CAPTURE_VIEWS = ("Current", "Iso", "Top", "Front", "Right")
+MIN_CAPTURE_PIXELS = 64
+MAX_CAPTURE_PIXELS = 4096
 
 
 class ViewModel:
@@ -490,6 +498,84 @@ class ViewModel:
                 "up": [up_x, up_y, up_z],
                 "perspective": perspective,
                 "scale_or_angle": scale_or_angle,
+            }
+        except Exception as e:
+            return error_result(e)
+
+    def capture_view_images(
+        self,
+        views: list[str],
+        width: int = 800,
+        height: int = 600,
+        fit: bool = True,
+        restore_view: bool = True,
+    ) -> dict[str, Any]:
+        """Render the active window from each of ``views`` and return the PNG bytes.
+
+        ``views`` entries are "Current" (the camera as it is) or one of the
+        named views ApplyNamedView accepts (Iso, Top, Front, Right). Each shot
+        goes through ``View.SaveAsImage`` into a fresh temporary directory, so
+        Solid Edge is never handed a path that exists (that raises a modal
+        overwrite prompt). With ``restore_view`` the camera read by
+        ``GetCamera`` before the first shot is put back with ``SetCamera``.
+        """
+        try:
+            bad = [v for v in views if v not in CAPTURE_VIEWS]
+            if not views or bad:
+                return {
+                    "error": (f"Invalid views: {bad or views}. Valid: {', '.join(CAPTURE_VIEWS)}"),
+                }
+            if not (MIN_CAPTURE_PIXELS <= width <= MAX_CAPTURE_PIXELS) or not (
+                MIN_CAPTURE_PIXELS <= height <= MAX_CAPTURE_PIXELS
+            ):
+                return {
+                    "error": (
+                        f"width and height must be {MIN_CAPTURE_PIXELS}-"
+                        f"{MAX_CAPTURE_PIXELS} pixels, got {width}x{height}"
+                    ),
+                }
+
+            doc = self.doc_manager.get_active_document()
+            view_obj, err = resolve_view(doc, "No window available to capture")
+            if err:
+                return err
+
+            moves_camera = fit or any(v != "Current" for v in views)
+            saved_camera = None
+            if restore_view and moves_camera:
+                try:
+                    saved_camera = tuple(view_obj.GetCamera())
+                except Exception as exc:
+                    _logger.warning("GetCamera failed; view will not be restored: %s", exc)
+
+            images: list[dict[str, Any]] = []
+            try:
+                with TemporaryDirectory(prefix="se_capture_") as tmp:
+                    for i, name in enumerate(views):
+                        if name != "Current":
+                            view_obj.ApplyNamedView(name)
+                        if fit:
+                            view_obj.Fit()
+                        path = os.path.join(tmp, f"{i}_{name}.png")
+                        view_obj.SaveAsImage(path, width, height)
+                        if not os.path.exists(path):
+                            return {"error": f"SaveAsImage wrote no file for view {name}"}
+                        with open(path, "rb") as f:
+                            images.append({"view": name, "png": f.read()})
+            finally:
+                restored = False
+                if saved_camera is not None:
+                    try:
+                        view_obj.SetCamera(*saved_camera[:11])
+                        restored = True
+                    except Exception as exc:
+                        _logger.warning("SetCamera failed; view not restored: %s", exc)
+
+            return {
+                "status": "captured",
+                "images": images,
+                "dimensions": [width, height],
+                "view_restored": restored,
             }
         except Exception as e:
             return error_result(e)
