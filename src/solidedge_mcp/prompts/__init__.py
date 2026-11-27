@@ -19,6 +19,10 @@ Conventions (apply to every tool):
 - Reference plane indices are 1-based: 1=Top(XY), 2=Right(YZ), 3=Front(XZ).
 - Face, edge, feature, and component indices are 0-based.
 - Results are dicts. A failure is {"error": "...", ...}; check for the key.
+  A part feature call that fails deletes whatever it added to the feature
+  tree and lists it under "rolled_back", so there is nothing to clean up.
+- capture_view returns pictures of the model; measure(type="element_distance"
+  / "element_angle") measures faces, edges and planes. Use both to check.
 
 Start every session with manage_connection(action="connect"), then create or
 open a document. Solid features need a closed sketch: create_sketch ->
