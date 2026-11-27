@@ -69,6 +69,9 @@ class _Watchdog:
 
 class TestCreateWeldment:
     def test_without_a_template_it_refuses_at_once_with_no_dialog(self, stack):
+        # Compare against what was open before, not against zero: the person at
+        # the keyboard may have their own documents open.
+        before = stack.connection.get_application().Documents.Count
         with _Watchdog() as dog:
             started = time.time()
             result = stack.doc.create_weldment()
@@ -78,7 +81,7 @@ class TestCreateWeldment:
         assert result.get("unsupported") is True
         assert elapsed < 5, f"took {elapsed:.1f}s -- was it waiting on something?"
         assert dog.titles == [], f"a dialog appeared: {dog.titles}"
-        assert stack.connection.get_application().Documents.Count == 0
+        assert stack.connection.get_application().Documents.Count == before
 
 
 class TestAMissingTemplateIsRefused:

@@ -79,10 +79,24 @@ def _click_ok(hwnd: int) -> bool:
     return True
 
 
-class dismiss_informational_dialog:
-    """While active, click OK on the dialog whose text starts with ``text_prefix``."""
+# The dialog's text follows the UI language, so a prefix has to be listed per
+# language. The Japanese one was read off Solid Edge 2026 Community Edition
+# with a Japanese UI: "今後セグメントコマンドは機能強化されないので、..." -- the
+# English prefix never matched it, and StructuralFrames.Add sat on the modal
+# until someone clicked OK.
+SEGMENTS_DIALOG_PREFIXES: tuple[str, ...] = (
+    "The Segments group of commands",
+    "今後セグメントコマンドは",
+)
 
-    def __init__(self, text_prefix: str, poll_seconds: float = 0.2) -> None:
+
+class dismiss_informational_dialog:
+    """While active, click OK on the dialog whose text starts with ``text_prefix``.
+
+    ``text_prefix`` may be one prefix or a tuple of them (one per UI language).
+    """
+
+    def __init__(self, text_prefix: str | tuple[str, ...], poll_seconds: float = 0.2) -> None:
         self.text_prefix = text_prefix
         self.poll_seconds = poll_seconds
         self.dismissed = 0
