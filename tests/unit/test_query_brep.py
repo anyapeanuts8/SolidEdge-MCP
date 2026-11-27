@@ -4,6 +4,7 @@ Unit tests for QueryManager backend methods (_brep.py mixin).
 Uses unittest.mock to simulate COM objects.
 """
 
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -704,15 +705,30 @@ class TestGetFaceNormal:
         doc.Models = models
 
         face = MagicMock()
-        face.GetNormal.return_value = (None, (0.0, 0.0, 1.0))
+        # A cylinder side: u is radians 0-2pi, v meters 0-0.03.
+        face.GetParamRange.return_value = ((0.0, 0.0), (2 * math.pi, 0.03))
+        face.GetNormal.return_value = ((math.pi, 0.015), (0.0, 0.0, 1.0))
         faces = MagicMock()
         faces.Count = 6
         faces.Item.return_value = face
         model.Body.Faces.return_value = faces
 
         result = qm.get_face_normal(0, 0.5, 0.5)
-        assert "normal" in result
         assert result["normal"] == [0.0, 0.0, 1.0]
+        # 0.5 is halfway along the face's own range, not the raw value 0.5.
+        face.GetNormal.assert_called_once_with(1, [math.pi, 0.015], [0.0, 0.0, 0.0])
+        assert result["native_params"] == [math.pi, 0.015]
+
+    def test_rejects_params_outside_0_1(self, query_mgr):
+        qm, doc = query_mgr
+        model = MagicMock()
+        doc.Models.Count = 1
+        doc.Models.Item.return_value = model
+        face = MagicMock()
+        model.Body.Faces.return_value.Count = 1
+        model.Body.Faces.return_value.Item.return_value = face
+        assert "0.0-1.0" in qm.get_face_normal(0, 1.5, 0.5)["error"]
+        face.GetNormal.assert_not_called()
 
     def test_error_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -880,7 +896,9 @@ class TestGetFaceCurvature:
         doc.Models = models
 
         face = MagicMock()
-        face.GetCurvatures.return_value = ((1.0, 0.0, 0.0), (20.0,), (0.0,))
+        face.GetParamRange.return_value = ((0.0, 0.0), (2 * math.pi, 0.03))
+        # Every [in,out] buffer comes back, Params first (Solid Edge 2026).
+        face.GetCurvatures.return_value = ((math.pi, 0.015), (1.0, 0.0, 0.0), (20.0,), (0.0,))
 
         faces = MagicMock()
         faces.Count = 6
@@ -891,6 +909,7 @@ class TestGetFaceCurvature:
         assert result["max_curvature"] == 20.0
         assert result["min_curvature"] == 0.0
         assert result["max_tangent"] == [1.0, 0.0, 0.0]
+        face.GetCurvatures.assert_called_once_with(1, [math.pi, 0.015], [0.0] * 3, [0.0], [0.0])
 
     def test_error_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -992,12 +1011,14 @@ class TestGetEdgeTangent:
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         _model, _face, edge = _setup_face_edge(doc)
-        edge.GetTangent.return_value = (None, (1.0, 0.0, 0.0))
+        edge.GetParamExtents.return_value = (0.0, 2 * math.pi)
+        edge.GetTangent.return_value = ((math.pi,), (1.0, 0.0, 0.0))
 
         result = qm.get_edge_tangent(0, 0, 0.5)
-        assert "tangent" in result
         assert result["tangent"] == [1.0, 0.0, 0.0]
         assert result["param"] == 0.5
+        assert result["native_param"] == math.pi
+        edge.GetTangent.assert_called_once_with(1, [math.pi], [0.0, 0.0, 0.0])
 
     def test_error_no_model(self, query_mgr):
         qm, doc = query_mgr
@@ -1065,7 +1086,8 @@ class TestGetEdgeCurvature:
     def test_success(self, query_mgr):
         qm, doc = query_mgr
         _model, _face, edge = _setup_face_edge(doc)
-        edge.GetCurvature.return_value = ((0.0, 1.0, 0.0), (20.0,))
+        edge.GetParamExtents.return_value = (0.0, 2 * math.pi)
+        edge.GetCurvature.return_value = ((math.pi,), (0.0, 1.0, 0.0), (20.0,))
 
         result = qm.get_edge_curvature(0, 0, 0.5)
         assert result["curvature"] == 20.0

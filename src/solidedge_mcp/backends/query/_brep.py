@@ -13,6 +13,8 @@ from ._base import (
     all_faces,
     body_of,
     bool_array,
+    edge_native_param,
+    face_native_params,
     i4_array,
     page_bounds,
     page_result,
@@ -20,6 +22,14 @@ from ._base import (
 )
 
 _logger = get_logger(__name__)
+
+
+def _first(value: Any) -> float:
+    """A scalar out of a one-element SAFEARRAY result, or the scalar itself."""
+    if isinstance(value, (tuple, list)):
+        return float(value[0])
+    return float(value)
+
 
 # geometry.tlb > GNTTypePropertyConstants. Face.GeometryForm / Edge.GeometryForm
 # return one of these, which is a single COM property read per entity — far
@@ -239,19 +249,14 @@ class BRepMixin:
         try:
             _doc, _model, _body, face = self._get_face(face_index)
 
-            params_arr = [u, v]
-            normals_arr = [0.0, 0.0, 0.0]
-
-            result = face.GetNormal(1, params_arr, normals_arr)
-
-            if isinstance(result, tuple) and len(result) >= 2:
-                normal = list(result[-1])
-            else:
-                normal = list(normals_arr)
+            native = face_native_params(face, u, v)
+            result = face.GetNormal(1, native, r8_array(3))
+            normal = list(result[-1])[:3]
 
             return {
-                "normal": normal[:3],
+                "normal": normal,
                 "params": [u, v],
+                "native_params": native,
                 "face_index": face_index,
             }
         except Exception as e:
@@ -434,31 +439,21 @@ class BRepMixin:
         try:
             _doc, _model, _body, face = self._get_face(face_index)
 
-            params_arr = [u, v]
-            max_tangents_arr = [0.0, 0.0, 0.0]
-            max_curvatures_arr = [0.0]
-            min_curvatures_arr = [0.0]
-
-            result = face.GetCurvatures(
-                1, params_arr, max_tangents_arr, max_curvatures_arr, min_curvatures_arr
-            )
-
-            if isinstance(result, tuple) and len(result) >= 3:
-                max_tangent = list(result[0])[:3]
-                r1 = result[1]
-                max_curvature = r1[0] if hasattr(r1, "__iter__") else float(r1)
-                r2 = result[2]
-                min_curvature = r2[0] if hasattr(r2, "__iter__") else float(r2)
-            else:
-                max_tangent = list(max_tangents_arr)[:3]
-                max_curvature = list(max_curvatures_arr)[0]
-                min_curvature = list(min_curvatures_arr)[0]
+            native = face_native_params(face, u, v)
+            # GetCurvatures hands back every [in,out] buffer, Params first:
+            # (Params, MaxTangents, MaxCurvatures, MinCurvatures). Reading
+            # from the end keeps the buffers straight.
+            result = face.GetCurvatures(1, native, r8_array(3), r8_array(1), r8_array(1))
+            max_tangent = list(result[-3])[:3]
+            max_curvature = _first(result[-2])
+            min_curvature = _first(result[-1])
 
             return {
                 "max_curvature": max_curvature,
                 "min_curvature": min_curvature,
                 "max_tangent": max_tangent,
                 "params": [u, v],
+                "native_params": native,
                 "face_index": face_index,
             }
         except Exception as e:
@@ -758,19 +753,14 @@ class BRepMixin:
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
-            params_arr = [param]
-            tangents_arr = [0.0, 0.0, 0.0]
-
-            result = edge.GetTangent(1, params_arr, tangents_arr)
-
-            if isinstance(result, tuple) and len(result) >= 2:
-                tangent = list(result[-1])
-            else:
-                tangent = list(tangents_arr)
+            native = edge_native_param(edge, param)
+            result = edge.GetTangent(1, [native], r8_array(3))
+            tangent = list(result[-1])[:3]
 
             return {
-                "tangent": tangent[:3],
+                "tangent": tangent,
                 "param": param,
+                "native_param": native,
                 "face_index": face_index,
                 "edge_index": edge_index,
             }
@@ -885,24 +875,17 @@ class BRepMixin:
         try:
             _doc, _model, _body, _face, edge = self._get_face_edge(face_index, edge_index)
 
-            params_arr = [param]
-            directions_arr = [0.0, 0.0, 0.0]
-            curvatures_arr = [0.0]
-
-            result = edge.GetCurvature(1, params_arr, directions_arr, curvatures_arr)
-
-            if isinstance(result, tuple) and len(result) >= 2:
-                direction = list(result[0])[:3]
-                r1 = result[1]
-                curvature = r1[0] if hasattr(r1, "__iter__") else float(r1)
-            else:
-                direction = list(directions_arr)[:3]
-                curvature = list(curvatures_arr)[0]
+            native = edge_native_param(edge, param)
+            # (Params, Directions, Curvatures): read from the end, as for faces.
+            result = edge.GetCurvature(1, [native], r8_array(3), r8_array(1))
+            direction = list(result[-2])[:3]
+            curvature = _first(result[-1])
 
             return {
                 "curvature": curvature,
                 "direction": direction,
                 "param": param,
+                "native_param": native,
                 "face_index": face_index,
                 "edge_index": edge_index,
             }
