@@ -29,6 +29,31 @@ def r8_array(size: int) -> Any:
     return [0.0] * size
 
 
+def face_native_params(face: Any, u: float, v: float) -> list[float]:
+    """Map normalised (u, v) in 0-1 onto the face's own parameter range.
+
+    A face's parameters are in model units, not 0-1: a cylinder's side runs
+    0-2*pi in u (radians) and 0-height in v (meters), and a planar face can
+    start below zero. Verified on Solid Edge 2026, where (0.5, 0.5) on a
+    cylinder's side was 0.5 rad round it, not halfway.
+    """
+    if not (0.0 <= u <= 1.0 and 0.0 <= v <= 1.0):
+        raise ValueError(f"u and v must be 0.0-1.0, got ({u}, {v})")
+    lo, hi = face.GetParamRange(r8_array(2), r8_array(2))
+    return [lo[0] + u * (hi[0] - lo[0]), lo[1] + v * (hi[1] - lo[1])]
+
+
+def edge_native_param(edge: Any, t: float) -> float:
+    """Map a normalised t in 0-1 onto the edge's own parameter extents.
+
+    A circular edge runs 0-2*pi, not 0-1 (Solid Edge 2026).
+    """
+    if not 0.0 <= t <= 1.0:
+        raise ValueError(f"param must be 0.0-1.0, got {t}")
+    lo, hi = edge.GetParamExtents()[:2]
+    return float(lo + t * (hi - lo))
+
+
 def i4_array(size: int) -> Any:
     """Buffer for a COM ``SAFEARRAY(VT_I4)*`` ``[in, out]`` parameter."""
     return [0] * size

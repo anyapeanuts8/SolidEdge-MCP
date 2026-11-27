@@ -22,7 +22,7 @@ from typing import Any
 from solidedge_mcp.backends.errors import error_result
 
 from ..constants import MeasureDistanceTypeConstants
-from ._base import QueryManagerBase, all_faces, body_of, r8_array
+from ._base import QueryManagerBase, all_faces, body_of, face_native_params, r8_array
 
 _DISTANCE_TYPES = {
     "minimum": MeasureDistanceTypeConstants.MeasureDistanceTypeConstants_MinimumDistance,
@@ -119,9 +119,7 @@ class MeasureMixin(QueryManagerBase):
             face.Geometry.GetPlaneData(r8_array(3), r8_array(3))
         except Exception:
             return None
-        lo, hi = face.GetParamRange(r8_array(2), r8_array(2))
-        mid = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]
-        result = face.GetNormal(1, mid, r8_array(3))
+        result = face.GetNormal(1, face_native_params(face, 0.5, 0.5), r8_array(3))
         return _unit(list(result[-1])[:3])
 
     @staticmethod
