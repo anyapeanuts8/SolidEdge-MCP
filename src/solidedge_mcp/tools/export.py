@@ -585,7 +585,8 @@ def capture_view(
 
     views: one image per entry, in order. Current = the camera as it is;
     Iso/Top/Front/Right = Solid Edge's named views. Default ["Iso"].
-    width/height: pixels, 64-4096. fit: zoom to fit before each shot.
+    width/height: pixels, 64-4096. fit: frame the model before each shot
+    (centre it and zoom it to fill the image).
     restore_view: put the user's camera back afterwards.
     Returns the PNG images followed by a JSON summary.
     """
@@ -600,6 +601,9 @@ def capture_view(
         return result
     images = result.pop("images")
     result["views"] = [img["view"] for img in images]
+    framing = {img["view"]: {k: img[k] for k in ("centered", "zoom") if k in img} for img in images}
+    if any(framing.values()):
+        result["framing"] = framing
     return [*(Image(data=img["png"], format="png") for img in images), result]
 
 

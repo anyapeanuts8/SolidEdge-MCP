@@ -441,7 +441,7 @@ class TestCaptureViewImages:
     def test_restore_off(self, view_mgr):
         vm, doc, view_obj = view_mgr
         self._writes_png(view_obj)
-        result = vm.capture_view_images(["Iso"], restore_view=False)
+        result = vm.capture_view_images(["Iso"], fit=False, restore_view=False)
         view_obj.GetCamera.assert_not_called()
         view_obj.SetCamera.assert_not_called()
         assert result["view_restored"] is False
@@ -475,3 +475,36 @@ class TestCaptureViewImages:
         vm, doc, view_obj = view_mgr
         doc.Windows.Count = 0
         assert "error" in vm.capture_view_images(["Iso"])
+
+    def test_fit_centres_and_zooms(self, view_mgr, monkeypatch):
+        """Fit moves the target to the body centre and scales to fill the frame."""
+        import solidedge_mcp.backends.export._view_model as vm_mod
+
+        vm, doc, view_obj = view_mgr
+        self._writes_png(view_obj)
+        camera = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, False, 100.0]
+        view_obj.GetCamera.return_value = tuple(camera)
+        monkeypatch.setattr(vm_mod, "model_center", lambda d: [0.0, 0.0, 0.5])
+        monkeypatch.setattr(vm_mod, "bmp_content_box", lambda data: (300, 200, 500, 400))
+        result = vm.capture_view_images(["Iso"], 800, 600)
+        assert result["status"] == "captured"
+        sets = [c.args for c in view_obj.SetCamera.call_args_list]
+        # 1: target moved to the centre, eye moved with it.
+        assert sets[0][:6] == (1.0, 1.0, 1.5, 0.0, 0.0, 0.5)
+        # 2: scale multiplied by the zoom factor (box 200 px tall in 600: 0.85*300/100).
+        assert sets[1][10] == pytest.approx(100.0 * 2.55)
+        # 3: the user's camera put back.
+        assert sets[-1] == tuple(camera)
+        assert result["images"][0]["centered"] is True
+        assert result["images"][0]["zoom"] == pytest.approx(2.55)
+
+    def test_perspective_is_centred_but_not_zoomed(self, view_mgr, monkeypatch):
+        import solidedge_mcp.backends.export._view_model as vm_mod
+
+        vm, doc, view_obj = view_mgr
+        self._writes_png(view_obj)
+        view_obj.GetCamera.return_value = (1, 1, 1, 0, 0, 0, 0, 0, 1, True, 0.5)
+        monkeypatch.setattr(vm_mod, "model_center", lambda d: [0.0, 0.0, 0.0])
+        result = vm.capture_view_images(["Iso"], restore_view=False)
+        assert result["images"][0]["zoom"] == 1.0
+        assert view_obj.SetCamera.call_count == 1
