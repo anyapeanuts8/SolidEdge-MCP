@@ -346,3 +346,130 @@ class TestVolumeDecidesWhenFacesDoNot:
         mgr = _Mgr(doc)
         assert mgr._geometry_snapshot() == (1, 6, None)
         assert "error" in verifies_geometry(lambda self_: {"status": "created"})(mgr)
+
+
+# ---------------------------------------------------------------------------
+# Rollback: a failed creator's tree entries are deleted, nothing else is
+# ---------------------------------------------------------------------------
+
+
+class _Entry:
+    def __init__(self, tree, name, fail_delete=False):
+        self._tree = tree
+        self.Name = name
+        self._fail = fail_delete
+
+    def Delete(self):
+        if self._fail:
+            raise RuntimeError("cannot delete")
+        self._tree.entries.remove(self)
+
+
+class _Edgebar:
+    def __init__(self, names):
+        self.entries = []
+        for n in names:
+            self.add(n)
+
+    def add(self, name, fail_delete=False):
+        self.entries.append(_Entry(self, name, fail_delete))
+
+    @property
+    def Count(self):
+        return len(self.entries)
+
+    def Item(self, i):
+        return self.entries[i - 1]
+
+    def names(self):
+        return [e.Name for e in self.entries]
+
+
+BASE_TREE = ["RefPlane_1", "RefPlane_2", "RefPlane_3", "ExtrudedProtrusion_1"]
+
+
+def _tree_doc(face_count=6, name="Part1.par"):
+    doc = _FakeDoc(models_count=1, face_count=face_count)
+    doc.DesignEdgebarFeatures = _Edgebar(BASE_TREE)
+    doc.FullName = name
+    return doc
+
+
+class _TreeMgr(_Mgr):
+    @verifies_geometry
+    def add_feature(self, *, name, new_faces, error=None, fail_delete=False):
+        self._doc.DesignEdgebarFeatures.add(name, fail_delete)
+        self._doc.body.face_count = new_faces
+        if error:
+            return {"error": error}
+        return {"status": "created", "type": "test"}
+
+
+def test_no_geometry_feature_is_rolled_back():
+    doc = _tree_doc()
+    result = _TreeMgr(doc).add_feature(name="ExtrudedCutout_1", new_faces=6)
+    assert "created no geometry" in result["error"]
+    assert result["rolled_back"] == ["ExtrudedCutout_1"]
+    assert doc.DesignEdgebarFeatures.names() == BASE_TREE
+
+
+def test_error_from_the_call_is_rolled_back_too():
+    doc = _tree_doc()
+    result = _TreeMgr(doc).add_feature(name="Round_1", new_faces=6, error="E_FAIL")
+    assert result["error"] == "E_FAIL"
+    assert result["rolled_back"] == ["Round_1"]
+    assert doc.DesignEdgebarFeatures.names() == BASE_TREE
+
+
+def test_success_is_kept():
+    doc = _tree_doc()
+    result = _TreeMgr(doc).add_feature(name="ExtrudedCutout_1", new_faces=7)
+    assert result["status"] == "created"
+    assert "rolled_back" not in result
+    assert doc.DesignEdgebarFeatures.names()[-1] == "ExtrudedCutout_1"
+
+
+def test_error_that_added_nothing_reports_no_rollback():
+    doc = _tree_doc()
+    assert _Mgr(doc).make_error() == {"error": "boom"}
+    assert doc.DesignEdgebarFeatures.names() == BASE_TREE
+
+
+def test_failed_delete_is_reported():
+    doc = _tree_doc()
+    result = _TreeMgr(doc).add_feature(name="Flange_1", new_faces=6, fail_delete=True)
+    assert result["rollback_failed"][0]["name"] == "Flange_1"
+    assert "rolled_back" not in result
+
+
+def test_other_document_is_never_touched():
+    doc = _tree_doc()
+    other = _tree_doc(name="Part2.par")
+    other.DesignEdgebarFeatures.add("Sketch_new")
+    mgr = _Mgr(doc)
+
+    @verifies_geometry
+    def switch_and_fail(self):
+        self.doc_manager.get_active_document.return_value = other
+        return {"error": "failed after switching"}
+
+    result = switch_and_fail(mgr)
+    assert "rolled_back" not in result
+    assert other.DesignEdgebarFeatures.names() == [*BASE_TREE, "Sketch_new"]
+
+
+def test_collection_growth_rolls_back():
+    from solidedge_mcp.backends.features._base import verifies_collection_growth
+
+    doc = _tree_doc()
+    doc.RefPlanes = _Counter(3)
+    mgr = _Mgr(doc)
+
+    @verifies_collection_growth("RefPlanes")
+    def add_plane(self):
+        doc.DesignEdgebarFeatures.add("RefPlane_4")
+        return {"status": "created", "type": "plane"}
+
+    result = add_plane(mgr)
+    assert "added nothing" in result["error"]
+    assert result["rolled_back"] == ["RefPlane_4"]

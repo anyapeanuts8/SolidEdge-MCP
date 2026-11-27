@@ -63,6 +63,118 @@ def _why_nothing(method_name: str) -> str:
     )
 
 
+def _active_document(holder: Any) -> Any:
+    """The active document behind a manager, or None when there is none or it is a mock."""
+    try:
+        doc = holder.doc_manager.get_active_document()
+    except Exception:
+        return None
+    if doc is None or type(doc).__module__.startswith("unittest.mock"):
+        return None
+    return doc
+
+
+def feature_tree_names(doc: Any) -> list[str] | None:
+    """Names in ``DesignEdgebarFeatures``, in tree order; None when unreadable.
+
+    This is the rollback's before/after signal. The edgebar holds reference
+    planes and features but not sketches, so a sketch drawn for a feature is
+    never in the difference and never deleted with it.
+    """
+    if doc is None:
+        return None
+    edgebar = com_get(doc, "DesignEdgebarFeatures")
+    if edgebar is None:
+        return None
+    try:
+        count = edgebar.Count
+        if type(count) is not int:
+            return None
+        return [str(com_get(edgebar.Item(i), "Name", "")) for i in range(1, count + 1)]
+    except Exception:
+        return None
+
+
+def roll_back_new_features(doc: Any, before: list[str]) -> dict[str, Any]:
+    """Delete the edgebar entries that are not in ``before``, newest first.
+
+    A creator that fails often leaves its feature behind: Solid Edge records
+    the node and then builds nothing, or raises after recording it. Verified on
+    Solid Edge 2026: an extruded cutout that misses the body adds
+    ExtrudedCutout_1 with the face count unchanged, and ``Delete`` on that
+    entry puts the tree back. Only names absent before the call are touched,
+    so nothing that existed before can be removed.
+    """
+    known = set(before)
+    rolled_back: list[str] = []
+    failed: list[dict[str, str]] = []
+    edgebar = com_get(doc, "DesignEdgebarFeatures")
+    if edgebar is None:
+        return {}
+    try:
+        count = int(edgebar.Count)
+    except Exception:
+        return {}
+    for i in range(count, 0, -1):
+        try:
+            entry = edgebar.Item(i)
+            name = str(com_get(entry, "Name", ""))
+        except Exception:
+            continue
+        if not name or name in known:
+            continue
+        try:
+            entry.Delete()
+            rolled_back.append(name)
+        except Exception as exc:
+            failed.append({"name": name, "error": str(exc)})
+    report: dict[str, Any] = {}
+    if rolled_back:
+        report["rolled_back"] = rolled_back
+        _logger.info("Rolled back features left by a failed call: %s", rolled_back)
+    if failed:
+        report["rollback_failed"] = failed
+        _logger.warning("Could not roll back: %s", failed)
+    return report
+
+
+_TreeSnapshot = tuple[str, list[str]]
+
+
+def _doc_identity(doc: Any) -> str:
+    return str(com_get(doc, "FullName", "") or com_get(doc, "Name", ""))
+
+
+def _tree_snapshot(self: Any) -> _TreeSnapshot | None:
+    """(document FullName, edgebar names) before a creator runs; None when unreadable."""
+    doc = _active_document(self)
+    names = feature_tree_names(doc)
+    if names is None:
+        return None
+    return _doc_identity(doc), names
+
+
+def _roll_back_if_failed(self: Any, before: _TreeSnapshot | None, result: Any) -> Any:
+    """On an error result, delete what the call added to the tree and say so.
+
+    Only in the document that was active before the call: a creator that makes
+    or switches documents would otherwise compare one document's tree against
+    another's.
+    """
+    if before is None or not (isinstance(result, dict) and "error" in result):
+        return result
+    doc = _active_document(self)
+    if doc is None:
+        return result
+    doc_name, names = before
+    if _doc_identity(doc) != doc_name:
+        return result
+    report = roll_back_new_features(doc, names)
+    if report:
+        result = {**result, **report}
+    return result
+
+
 def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
     """Decorate a feature-creation method to confirm it actually built geometry.
 
@@ -86,31 +198,40 @@ def verifies_geometry(fn: _Creator[_P]) -> _Creator[_P]:
 
     @functools.wraps(fn)
     def wrapper(self: Any, /, *args: _P.args, **kwargs: _P.kwargs) -> dict[str, Any]:
-        before = self._geometry_snapshot()
-        result = fn(self, *args, **kwargs)
-        if not (isinstance(result, dict) and "error" not in result):
-            return result
-        after = self._geometry_snapshot()
-        if self._no_geometry_created(before, after):
-            _logger.warning(
-                f"{fn.__name__} reported success but the body did not change "
-                f"(models {before[0]}->{after[0]}, faces {before[1]}->{after[1]}); "
-                f"reporting as a no-geometry error."
-            )
-            return {
-                "error": (
-                    f"{fn.__name__} reported success but created no geometry: the "
-                    f"body's face count and volume did not change. {_why_nothing(fn.__name__)}"
-                ),
-                "attempted": result.get("type"),
-                "models_before": before[0],
-                "models_after": after[0],
-                "faces_before": before[1],
-                "faces_after": after[1],
-            }
-        return result
+        tree_before = _tree_snapshot(self)
+        result = _verified_geometry_call(self, fn, args, kwargs)
+        return _roll_back_if_failed(self, tree_before, result)
 
     return wrapper
+
+
+def _verified_geometry_call(
+    self: Any, fn: Callable[..., dict[str, Any]], args: Any, kwargs: Any
+) -> dict[str, Any]:
+    """The body of ``verifies_geometry``: call, then refuse a success that built nothing."""
+    before = self._geometry_snapshot()
+    result = fn(self, *args, **kwargs)
+    if not (isinstance(result, dict) and "error" not in result):
+        return result
+    after = self._geometry_snapshot()
+    if self._no_geometry_created(before, after):
+        _logger.warning(
+            f"{fn.__name__} reported success but the body did not change "
+            f"(models {before[0]}->{after[0]}, faces {before[1]}->{after[1]}); "
+            f"reporting as a no-geometry error."
+        )
+        return {
+            "error": (
+                f"{fn.__name__} reported success but created no geometry: the "
+                f"body's face count and volume did not change. {_why_nothing(fn.__name__)}"
+            ),
+            "attempted": result.get("type"),
+            "models_before": before[0],
+            "models_after": after[0],
+            "faces_before": before[1],
+            "faces_after": after[1],
+        }
+    return result
 
 
 def verify_geometry_on_creators(cls: type) -> type:
@@ -235,6 +356,10 @@ def verifies_change(snapshot: Callable[[Any], int | None], what: str) -> _Decora
     def decorate(fn: _Creator[_P]) -> _Creator[_P]:
         @functools.wraps(fn)
         def wrapper(self: Any, /, *args: _P.args, **kwargs: _P.kwargs) -> dict[str, Any]:
+            tree_before = _tree_snapshot(self)
+            return _roll_back_if_failed(self, tree_before, checked(self, *args, **kwargs))
+
+        def checked(self: Any, /, *args: _P.args, **kwargs: _P.kwargs) -> dict[str, Any]:
             before = snapshot(self)
             result = fn(self, *args, **kwargs)
             if not (isinstance(result, dict) and "error" not in result):
