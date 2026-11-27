@@ -65,3 +65,36 @@ def test_current_without_fit_leaves_camera_alone(stack, view_mgr, box):
     assert result["status"] == "captured", result
     assert result["view_restored"] is False
     assert _camera(stack) == pytest.approx(before)
+
+
+def test_fit_frames_the_model(stack, view_mgr, box):
+    """Fit alone left the part small and off-centre; framing centres and zooms it."""
+    from solidedge_mcp.backends.export._framing import bmp_content_box
+
+    result = view_mgr.capture_view_images(["Iso"], 640, 480)
+    img = result["images"][0]
+    assert img["centered"] is True
+    assert img["zoom"] >= 1.0
+
+    # Render the framed view once more as a BMP and check how much it fills.
+    import os
+    import tempfile
+
+    doc = stack.doc.get_active_document()
+    view = doc.Windows.Item(1).View
+    saved = tuple(view.GetCamera())
+    try:
+        view.ApplyNamedView("Iso")
+        view.Fit()
+        with tempfile.TemporaryDirectory() as tmp:
+            view_mgr._frame(view, doc, os.path.join(tmp, "probe.bmp"), 640, 480)
+            path = os.path.join(tmp, "framed.bmp")
+            view.SaveAsImage(path, 640, 480)
+            with open(path, "rb") as f:
+                left, top, right, bottom = bmp_content_box(f.read())
+    finally:
+        view.SetCamera(*saved[:11])
+    fill = max((right - left) / 640, (bottom - top) / 480)
+    assert 0.7 <= fill <= 0.95, (left, top, right, bottom)
+    centre_x, centre_y = (left + right) / 2, (top + bottom) / 2
+    assert abs(centre_x - 320) < 64 and abs(centre_y - 240) < 48

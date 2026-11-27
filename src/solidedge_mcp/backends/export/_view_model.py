@@ -13,6 +13,7 @@ from ..constants import (
 )
 from ..logging import get_logger
 from ._base import com_get, resolve_view
+from ._framing import bmp_content_box, model_center, zoom_factor
 
 _logger = get_logger(__name__)
 
@@ -502,6 +503,40 @@ class ViewModel:
         except Exception as e:
             return error_result(e)
 
+    @staticmethod
+    def _frame(view_obj: Any, doc: Any, probe_path: str, width: int, height: int) -> dict[str, Any]:
+        """Centre the bodies and zoom them to fill the frame; see export/_framing.py.
+
+        Returns what was done, for the caller's summary. Every step is
+        best-effort: a step that cannot run leaves the Fit view as it was.
+        """
+        done: dict[str, Any] = {"centered": False, "zoom": 1.0}
+        camera = list(view_obj.GetCamera())[:11]
+        if len(camera) < 11:
+            return done
+        center = model_center(doc)
+        if center is not None:
+            shift = [c - t for c, t in zip(center, camera[3:6], strict=True)]
+            camera[0:3] = [e + d for e, d in zip(camera[0:3], shift, strict=True)]
+            camera[3:6] = center
+            view_obj.SetCamera(*camera)
+            done["centered"] = True
+        if camera[9]:  # perspective: ScaleOrAngle is a field of view, not a scale
+            return done
+        view_obj.SaveAsImage(probe_path, width, height)
+        if not os.path.exists(probe_path):
+            return done
+        with open(probe_path, "rb") as f:
+            box = bmp_content_box(f.read())
+        if box is None:
+            return done
+        factor = zoom_factor(box, width, height)
+        if abs(factor - 1.0) > 0.02:
+            camera[10] = camera[10] * factor
+            view_obj.SetCamera(*camera)
+            done["zoom"] = round(factor, 3)
+        return done
+
     def capture_view_images(
         self,
         views: list[str],
@@ -554,14 +589,17 @@ class ViewModel:
                     for i, name in enumerate(views):
                         if name != "Current":
                             view_obj.ApplyNamedView(name)
+                        framing: dict[str, Any] = {}
                         if fit:
                             view_obj.Fit()
+                            probe = os.path.join(tmp, f"{i}_{name}_probe.bmp")
+                            framing = self._frame(view_obj, doc, probe, width, height)
                         path = os.path.join(tmp, f"{i}_{name}.png")
                         view_obj.SaveAsImage(path, width, height)
                         if not os.path.exists(path):
                             return {"error": f"SaveAsImage wrote no file for view {name}"}
                         with open(path, "rb") as f:
-                            images.append({"view": name, "png": f.read()})
+                            images.append({"view": name, "png": f.read(), **framing})
             finally:
                 restored = False
                 if saved_camera is not None:
