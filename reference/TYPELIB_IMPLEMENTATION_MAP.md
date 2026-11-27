@@ -743,3 +743,15 @@ src/solidedge_mcp/
 │   └── diagnostics.py
 └── backends/              <-- EXISTING: Core logic (unchanged)
 ```
+
+## Additions after 0.1.0rc1 (fork)
+
+Not yet folded into the counts above.
+
+- `capture_view` (export): `View.GetCamera` / `ApplyNamedView` / `Fit` / `SaveAsImage` / `SetCamera`,
+  returning the PNGs as MCP image content. Tool count 119 -> 120.
+- `measure(type="element_distance")`: `PartDocument.MeasureDistance` (Minimum/MaximumDistance; out-params
+  force `DistanceType`/`Point1`/`Point2` by keyword), and for reference planes `RefPlane.GetRootPoint` /
+  `GetNormal` with `Vertex.GetPointData` and `Plane.GetPlaneData`.
+- `measure(type="element_angle")`: `Face.GetParamRange` + `Face.GetNormal` (outward normal),
+  `Line.GetLineData` (straightness) + `Edge.GetEndPoints`, `RefPlane.GetNormal`.

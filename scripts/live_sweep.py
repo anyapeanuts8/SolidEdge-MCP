@@ -489,6 +489,8 @@ CASES: list[Case] = [
         {"type": "distance", "x1": 0, "y1": 0, "z1": 0, "x2": 0.08, "y2": 0.048, "z2": 0.03},
         "box",
     ),
+    Case("measure", {"type": "element_distance", "first": "face:0", "second": "face:2"}, "box"),
+    Case("measure", {"type": "element_angle", "first": "face:0", "second": "plane:1"}, "box"),
     Case("manage_variable", {"action": "add", "name": "W", "formula": "20 mm"}, "box"),
     Case("manage_property", {"action": "set_custom", "name": "Batch", "value": "X-1"}, "box"),
     Case("manage_material", {"action": "set_density", "density": 2700.0}, "box"),
