@@ -105,6 +105,8 @@ class TestMeasure:
         [
             ("distance", "measure_distance"),
             ("angle", "measure_angle"),
+            ("element_distance", "measure_element_distance"),
+            ("element_angle", "measure_element_angle"),
         ],
     )
     def test_dispatch(self, mock_mgr, disc, method):
@@ -118,6 +120,20 @@ class TestMeasure:
         measure(type="distance", x1=0.0, y1=0.0, z1=0.0, x2=1.0, y2=0.0, z2=0.0)
         mock_mgr.measure_distance.assert_called_once_with(
             x1=0.0, y1=0.0, z1=0.0, x2=1.0, y2=0.0, z2=0.0
+        )
+
+    def test_element_distance_passes_elements(self, mock_mgr):
+        mock_mgr.measure_element_distance.return_value = {"distance": 1.0}
+        measure(type="element_distance", first="face:0", second="vertex:2", extent="maximum")
+        mock_mgr.measure_element_distance.assert_called_once_with(
+            first="face:0", second="vertex:2", extent="maximum"
+        )
+
+    def test_element_angle_passes_elements(self, mock_mgr):
+        mock_mgr.measure_element_angle.return_value = {"angle": 90.0}
+        measure(type="element_angle", first="face:0/edge:1", second="plane:1")
+        mock_mgr.measure_element_angle.assert_called_once_with(
+            first="face:0/edge:1", second="plane:1"
         )
 
     def test_unknown(self, mock_mgr):

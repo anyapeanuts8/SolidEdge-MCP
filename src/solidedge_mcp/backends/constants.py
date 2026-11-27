@@ -84,6 +84,14 @@ class FaceQueryConstants:
     igQueryCylinder = 10
 
 
+class MeasureDistanceTypeConstants:
+    """Part.tlb / constant.tlb > MeasureDistanceTypeConstants (PartDocument.MeasureDistance)."""
+
+    MeasureDistanceTypeConstants_MinimumDistance = 1
+    MeasureDistanceTypeConstants_MaximumDistance = 2
+    MeasureDistanceTypeConstants_SmartDistance = 3
+
+
 class ViewOrientationConstants:
     """constant.tlb > ViewOrientationConstants.
 

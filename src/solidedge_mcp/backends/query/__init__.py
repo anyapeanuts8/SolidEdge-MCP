@@ -9,6 +9,7 @@ from ._brep import BRepMixin
 from ._document import DocumentQueryMixin
 from ._features import FeatureQueryMixin
 from ._materials import MaterialsMixin
+from ._measure import MeasureMixin
 from ._physical_props import PhysicalPropsMixin
 from ._selection import SelectionMixin
 from ._spatial import SpatialContextMixin
@@ -17,6 +18,7 @@ from ._variables import VariablesMixin
 
 class QueryManager(
     PhysicalPropsMixin,
+    MeasureMixin,
     DocumentQueryMixin,
     VariablesMixin,
     BRepMixin,

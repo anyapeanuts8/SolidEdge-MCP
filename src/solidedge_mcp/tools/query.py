@@ -19,7 +19,7 @@ from solidedge_mcp.tools._registry import register_tool
 
 
 def measure(
-    type: Literal["distance", "angle"] = "distance",
+    type: Literal["distance", "angle", "element_distance", "element_angle"] = "distance",
     x1: float = 0.0,
     y1: float = 0.0,
     z1: float = 0.0,
@@ -29,11 +29,20 @@ def measure(
     x3: float = 0.0,
     y3: float = 0.0,
     z3: float = 0.0,
+    first: str = "",
+    second: str = "",
+    extent: Literal["minimum", "maximum"] = "minimum",
 ) -> dict[str, Any]:
-    """Measure between 3D points (meters). Read-only.
+    """Measure points or model elements of the active part (meters, degrees). Read-only.
 
     distance: point1 to point2. angle: degrees at vertex point2 between
     point1 and point3.
+    element_distance: first to second, extent minimum or maximum, with the two
+    points it runs between. element_angle: between planar faces / ref planes
+    (outward normals) or straight edges (directions); also acute_angle.
+    Elements: 'face:N', 'face:N/edge:M', 'vertex:N' (0-based, as query_body /
+    query_edge number them) or 'plane:N' (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
+    A plane takes a vertex, a parallel face or a parallel plane, minimum only.
     """
     match type:
         case "distance":
@@ -42,6 +51,10 @@ def measure(
             return query_manager.measure_angle(
                 x1=x1, y1=y1, z1=z1, x2=x2, y2=y2, z2=z2, x3=x3, y3=y3, z3=z3
             )
+        case "element_distance":
+            return query_manager.measure_element_distance(first=first, second=second, extent=extent)
+        case "element_angle":
+            return query_manager.measure_element_angle(first=first, second=second)
         case _:
             return {"error": f"Unknown type: {type}"}
 
