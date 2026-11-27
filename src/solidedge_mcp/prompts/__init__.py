@@ -62,7 +62,9 @@ All lengths in meters, angles in degrees. Plane indices 1-based
 2. draw_circle(cx=0.05, cy=0.05, radius=0.005)
 3. close_sketch()
 4. create_extruded_cutout(method="through_all")
-   Front-plane cutouts: use direction="Symmetric" to cut both ways.
+   A finite cut whose sketch lies on a face or on the Front plane: use
+   method="finite", direction="Symmetric" to cut both ways (Normal may point
+   into empty space).
    One closed profile per cutout sketch; SE rejects disjoint profiles.
 
 ## Assembly

@@ -17,7 +17,7 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
-from ._base import verify_geometry_on_creators
+from ._base import unknown_direction, verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
@@ -97,7 +97,9 @@ class ExtrudeMixin:
                 "Reverse": DirectionConstants.igLeft,
                 "Symmetric": DirectionConstants.igSymmetric,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             # AddFiniteExtrudedProtrusion: NumProfiles, ProfileArray, ProfilePlaneSide, Distance
             models.AddFiniteExtrudedProtrusion(1, (profile,), dir_const, distance)
@@ -192,7 +194,9 @@ class ExtrudeMixin:
                 "Reverse": DirectionConstants.igLeft,
                 "Symmetric": DirectionConstants.igSymmetric,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             models.AddExtrudedProtrusionWithThinWall(
                 1,  # NumberOfProfiles
@@ -281,7 +285,9 @@ class ExtrudeMixin:
                 "Reverse": DirectionConstants.igLeft,
                 "Symmetric": DirectionConstants.igSymmetric,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             models.AddExtrudedProtrusion(
                 1,  # NumberOfProfiles
@@ -358,7 +364,9 @@ class ExtrudeMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             protrusions = model.ExtrudedProtrusions
             protrusions.AddThroughNext(
@@ -465,7 +473,9 @@ class ExtrudeMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            side = direction_map.get(direction, DirectionConstants.igRight)
+            side = direction_map.get(direction)
+            if side is None:
+                return unknown_direction(direction, direction_map)
 
             protrusions = model.ExtrudedProtrusions
             protrusions.AddThroughNextMulti(1, (profile,), side)

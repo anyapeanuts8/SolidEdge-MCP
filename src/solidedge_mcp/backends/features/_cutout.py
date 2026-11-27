@@ -18,7 +18,7 @@ from ..constants import (
     NormalCutoutMethodConstants,
 )
 from ..logging import get_logger
-from ._base import verify_geometry_on_creators
+from ._base import unknown_direction, verify_geometry_on_creators
 
 _logger = get_logger(__name__)
 
@@ -115,8 +115,14 @@ class CutoutMixin:
             direction_map = {
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
+                # Half the depth each way. Verified on Solid Edge 2026: a cut
+                # from a sketch plane lying on the top face removes material
+                # below it only with this or igLeft.
+                "Symmetric": DirectionConstants.igSymmetric,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddFiniteMulti(1, (profile,), dir_const, distance)
@@ -162,7 +168,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddThroughAllMulti(1, (profile,), dir_const)
@@ -264,7 +272,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             # The Method argument is igSMFaceCutout, a sheet metal face cutout.
             # On an ordinary part the call succeeds and removes nothing, which
@@ -578,7 +588,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             cutouts = model.ExtrudedCutouts
             cutouts.AddThroughNextMulti(1, (profile,), dir_const)
@@ -623,7 +635,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             # igNormalCutoutMethod_Normal = 0 (default method)
             cutouts = model.NormalCutouts
@@ -884,7 +898,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            dir_const = direction_map.get(direction, DirectionConstants.igRight)
+            dir_const = direction_map.get(direction)
+            if dir_const is None:
+                return unknown_direction(direction, direction_map)
 
             cutouts = model.NormalCutouts
             cutouts.AddThroughNextMulti(1, (profile,), dir_const, 0)
@@ -929,7 +945,9 @@ class CutoutMixin:
                 "Normal": DirectionConstants.igRight,
                 "Reverse": DirectionConstants.igLeft,
             }
-            side = direction_map.get(direction, DirectionConstants.igRight)
+            side = direction_map.get(direction)
+            if side is None:
+                return unknown_direction(direction, direction_map)
 
             cutouts = model.NormalCutouts
             # AddFiniteByKeyPointMulti takes six arguments: NumProfiles,
