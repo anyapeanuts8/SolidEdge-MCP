@@ -20,13 +20,16 @@ def create_extruded_cutout(
         "through_all_multi_body",
     ] = "finite",
     distance: float = 0.0,
-    direction: Literal["Normal", "Reverse"] = "Normal",
+    direction: Literal["Normal", "Reverse", "Symmetric"] = "Normal",
     from_plane_index: int = 0,
     to_plane_index: int = 0,
 ) -> dict[str, Any]:
     """Create an extruded cutout (removes material) from the active sketch.
 
-    distance in meters (finite, multi_body). from/to_plane_index: required for
+    distance in meters (finite, multi_body). direction: Normal/Reverse is the
+    side of the sketch plane; Symmetric (finite only) cuts distance/2 each way,
+    which is what a sketch on a top face or on the Front plane usually needs.
+    from/to_plane_index: required for
     from_to* methods; 1-based (1=Top/XY, 2=Right/YZ, 3=Front/XZ).
     'by_keypoint' (unsupported: needs a KeyPoint or tangent face object this
     server cannot select); use 'finite', 'from_to' or 'through_all'.

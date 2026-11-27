@@ -108,6 +108,29 @@ class TestExtrudedCutout:
             0.01,  # igLeft=1
         )
 
+    def test_symmetric_direction(self, feature_mgr, managers):
+        _, _, _, _, model, profile = managers
+        result = feature_mgr.create_extruded_cutout(0.012, direction="Symmetric")
+        assert result["direction"] == "Symmetric"
+        model.ExtrudedCutouts.AddFiniteMulti.assert_called_once_with(
+            1,
+            (profile,),
+            3,
+            0.012,  # igSymmetric=3
+        )
+
+    def test_unknown_direction_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_extruded_cutout(0.01, direction="Sideways")
+        assert "Unknown direction" in result["error"]
+        model.ExtrudedCutouts.AddFiniteMulti.assert_not_called()
+
+    def test_symmetric_through_all_is_refused(self, feature_mgr, managers):
+        _, _, _, _, model, _ = managers
+        result = feature_mgr.create_extruded_cutout_through_all(direction="Symmetric")
+        assert "Unknown direction" in result["error"]
+        model.ExtrudedCutouts.AddThroughAllMulti.assert_not_called()
+
 
 # ============================================================================
 # EXTRUDED CUTOUT THROUGH ALL

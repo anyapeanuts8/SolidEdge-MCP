@@ -57,3 +57,21 @@ def test_cutout_that_cuts_is_kept(managers, box):
     assert "rolled_back" not in result
     assert len(_tree(box)) == len(before) + 1
     assert _faces(box) == 7
+
+
+def test_symmetric_cut_from_a_plane_on_the_top_face(managers, box, stack):
+    """A cut sketched on the top face needs Symmetric (or Reverse) to reach material.
+
+    "Symmetric" used to be read as Normal, which pointed into empty space above
+    the box, so nothing was cut and the result still said "Symmetric".
+    """
+    _, sketch_mgr, feature_mgr = managers
+    plane = feature_mgr.create_ref_plane_by_offset(1, 0.03)
+    assert plane.get("status") == "created", plane
+    index = box.RefPlanes.Count
+    sketch_mgr.create_sketch_on_plane_index(index)
+    sketch_mgr.draw_rectangle(0.02, 0.02, 0.04, 0.04)
+    sketch_mgr.close_sketch()
+    result = feature_mgr.create_extruded_cutout(0.01, "Symmetric")
+    assert result.get("status") == "created", result
+    assert _faces(box) == 11

@@ -25,7 +25,7 @@ from ..constants import (
     TreatmentTypeConstants,
 )
 from ..logging import get_logger
-from ._base import verifies_collection_growth, verifies_geometry
+from ._base import unknown_direction, verifies_collection_growth, verifies_geometry
 
 _logger = get_logger(__name__)
 
@@ -316,7 +316,9 @@ class SheetMetalMixin:
                 "Reverse": DirectionConstants.igLeft,
                 "Symmetric": DirectionConstants.igSymmetric,
             }
-            web_direction = dir_map.get(direction, DirectionConstants.igRight)
+            web_direction = dir_map.get(direction)
+            if web_direction is None:
+                return unknown_direction(direction, dir_map)
 
             profile_arr = list(profiles)
 
@@ -735,7 +737,9 @@ class SheetMetalMixin:
                 "Reverse": DirectionConstants.igLeft,
                 "Symmetric": DirectionConstants.igSymmetric,
             }
-            side = dir_map.get(direction, DirectionConstants.igRight)
+            side = dir_map.get(direction)
+            if side is None:
+                return unknown_direction(direction, dir_map)
 
             ribs = model.Ribs
             ribs.Add(

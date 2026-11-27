@@ -63,6 +63,17 @@ def _why_nothing(method_name: str) -> str:
     )
 
 
+def unknown_direction(direction: str, mapping: dict[str, Any]) -> dict[str, Any]:
+    """The error for a direction a method has no constant for.
+
+    Every creator used to look its direction up with ``.get(direction,
+    igRight)``, so "Symmetric" on a method that has no symmetric form quietly
+    became Normal and the result still echoed "Symmetric". An extruded cutout
+    from a plane lying on a top face then cut the empty space above it.
+    """
+    return {"error": f"Unknown direction: {direction!r}. This method takes {', '.join(mapping)}."}
+
+
 def _active_document(holder: Any) -> Any:
     """The active document behind a manager, or None when there is none or it is a mock."""
     try:
