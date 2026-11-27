@@ -89,7 +89,7 @@ degrees, the symbol-file origin round trip, and the swept-surface refusal;
 document (and the ordered refusal leaving no dead feature), a split by a
 reference plane, and a thicken for all three sides. Each was mutation-tested
 when written. Most tools still have no integration
-test of their own; `scripts/live_sweep.py` is what drives all 119 once, and
+test of their own; `scripts/live_sweep.py` is what drives all 120 once, and
 its record (below) is the coverage that exists for the rest.
 
 ### 2. Numeric correctness -- checked, the last item closed
@@ -131,7 +131,7 @@ parts gave the louver, thread, contour flange and lofted flange the values
 they were then retried with -- and still refused with, which is what makes
 those refusals final on this install.
 
-`scripts/live_sweep.py` drives all 119 tools through the real server and
+`scripts/live_sweep.py` drives all 120 tools through the real server and
 records every outcome in `reference/LIVE_SWEEP.md`. The latest run, on
 2026-09-18 for the `0.1.0rc1` candidate with everything of the 17th and 18th
 in (synchronous flanges with a bend deduction, splits, thickens, slots, beads,
