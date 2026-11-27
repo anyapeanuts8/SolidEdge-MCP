@@ -7,6 +7,7 @@ Uses unittest.mock to simulate COM objects.
 """
 
 import math
+import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -395,3 +396,82 @@ class TestSetViewBackground:
 
         result = vm.set_view_background(0, 0, 0)
         assert "error" in result
+
+
+class TestCaptureViewImages:
+    """View.SaveAsImage into a temp dir, bytes read back, camera restored."""
+
+    CAMERA = (1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, False, 0.5)
+
+    @staticmethod
+    def _writes_png(view_obj):
+        def save(path, width, height):
+            with open(path, "wb") as f:
+                f.write(b"\x89PNG" + f"{width}x{height}".encode())
+
+        view_obj.SaveAsImage.side_effect = save
+
+    def test_named_views_fit_and_restore(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        self._writes_png(view_obj)
+        view_obj.GetCamera.return_value = self.CAMERA
+        result = vm.capture_view_images(["Iso", "Top"], 320, 240)
+        assert result["status"] == "captured"
+        assert [img["view"] for img in result["images"]] == ["Iso", "Top"]
+        assert result["images"][0]["png"] == b"\x89PNG320x240"
+        assert [c.args for c in view_obj.ApplyNamedView.call_args_list] == [("Iso",), ("Top",)]
+        assert view_obj.Fit.call_count == 2
+        view_obj.SetCamera.assert_called_once_with(*self.CAMERA)
+        assert result["view_restored"] is True
+        # The temp files are gone once the call returns.
+        for call in view_obj.SaveAsImage.call_args_list:
+            assert not os.path.exists(call.args[0])
+
+    def test_current_without_fit_touches_no_camera(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        self._writes_png(view_obj)
+        result = vm.capture_view_images(["Current"], fit=False)
+        assert result["status"] == "captured"
+        view_obj.ApplyNamedView.assert_not_called()
+        view_obj.Fit.assert_not_called()
+        view_obj.GetCamera.assert_not_called()
+        view_obj.SetCamera.assert_not_called()
+        assert result["view_restored"] is False
+
+    def test_restore_off(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        self._writes_png(view_obj)
+        result = vm.capture_view_images(["Iso"], restore_view=False)
+        view_obj.GetCamera.assert_not_called()
+        view_obj.SetCamera.assert_not_called()
+        assert result["view_restored"] is False
+
+    def test_camera_restored_when_save_fails(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        view_obj.GetCamera.return_value = self.CAMERA
+        view_obj.SaveAsImage.side_effect = Exception("boom")
+        result = vm.capture_view_images(["Iso"])
+        assert "error" in result
+        view_obj.SetCamera.assert_called_once_with(*self.CAMERA)
+
+    def test_no_file_written(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        result = vm.capture_view_images(["Iso"], restore_view=False)
+        assert "wrote no file" in result["error"]
+
+    @pytest.mark.parametrize("views", [[], ["Left"], ["Iso", "Back"]])
+    def test_rejects_views(self, view_mgr, views):
+        vm, doc, view_obj = view_mgr
+        assert "Invalid views" in vm.capture_view_images(views)["error"]
+        view_obj.SaveAsImage.assert_not_called()
+
+    @pytest.mark.parametrize("size", [(10, 600), (800, 5000)])
+    def test_rejects_size(self, view_mgr, size):
+        vm, doc, view_obj = view_mgr
+        assert "pixels" in vm.capture_view_images(["Iso"], *size)["error"]
+        view_obj.SaveAsImage.assert_not_called()
+
+    def test_no_window(self, view_mgr):
+        vm, doc, view_obj = view_mgr
+        doc.Windows.Count = 0
+        assert "error" in vm.capture_view_images(["Iso"])

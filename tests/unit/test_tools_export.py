@@ -620,3 +620,35 @@ class TestExportOverwrite:
 
             kwargs = getattr(mock_export, method).call_args.kwargs
             assert kwargs["overwrite"] is True, f"{fmt} dropped overwrite"
+
+
+# === capture_view ===
+
+
+class TestCaptureView:
+    def test_returns_images_then_summary(self, mock_export, mock_view):
+        from fastmcp.utilities.types import Image
+
+        from solidedge_mcp.tools.export import capture_view
+
+        mock_view.capture_view_images.return_value = {
+            "status": "captured",
+            "images": [{"view": "Iso", "png": b"a"}, {"view": "Top", "png": b"b"}],
+            "dimensions": [800, 600],
+            "view_restored": True,
+        }
+        result = capture_view(views=["Iso", "Top"], width=800, height=600)
+        mock_view.capture_view_images.assert_called_once_with(
+            views=["Iso", "Top"], width=800, height=600, fit=True, restore_view=True
+        )
+        assert isinstance(result[0], Image) and result[0].data == b"a"
+        assert isinstance(result[1], Image) and result[1].data == b"b"
+        assert result[2]["views"] == ["Iso", "Top"]
+        assert "images" not in result[2]
+
+    def test_default_is_iso(self, mock_export, mock_view):
+        from solidedge_mcp.tools.export import capture_view
+
+        mock_view.capture_view_images.return_value = {"error": "x"}
+        assert capture_view() == {"error": "x"}
+        assert mock_view.capture_view_images.call_args.kwargs["views"] == ["Iso"]

@@ -506,6 +506,7 @@ CASES: list[Case] = [
         "box",
     ),
     Case("display_control", {"action": "set_mode", "mode": "Shaded"}, "box"),
+    Case("capture_view", {"views": ["Iso", "Top"], "width": 320, "height": 240}, "box"),
     Case(
         "export_file",
         {"format": "step", "file_path": str(TMP / "out.step"), "overwrite": True},
